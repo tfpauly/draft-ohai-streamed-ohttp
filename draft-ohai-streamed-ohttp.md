@@ -1,38 +1,26 @@
 ---
-title: "TODO - Your title"
-abbrev: "TODO - Abbreviation"
-category: info
+title: "Streaming Oblivious HTTP Messages"
+abbrev: "Streamed OHTTP"
+category: std
 
-docname: draft-ohai-streamed-ohttp-latest
-submissiontype: IETF  # also: "independent", "IAB", or "IRTF"
+docname: draft-ohai-streamed-http-latest
+submissiontype: IETF
 number:
 date:
 consensus: true
 v: 3
-# area: AREA
-# workgroup: WG Working Group
-keyword:
- - next generation
- - unicorn
- - sparkling distributed ledger
+area: ART
+workgroup: OHAI Working Group
 venue:
-#  group: WG
-#  type: Working Group
-#  mail: WG@example.com
-#  arch: https://example.com/WG
-  github: "tfpauly/draft-ohai-streamed-ohttp"
-  latest: "https://tfpauly.github.io/draft-ohai-streamed-ohttp/draft-ohai-streamed-ohttp.html"
+  group: OHAI
+  type: Working Group
+  mail: ohai@ietf.org
 
 author:
  -
-    fullname: Your Name Here
-    organization: Your Organization Here
-    email: "tpauly@apple.com"
-
-normative:
-
-informative:
-
+    fullname: Tommy Pauly
+    organization: Apple
+    email: tpauly@apple.com
 
 --- abstract
 
