@@ -85,7 +85,6 @@ Non-Final Chunk {
 ~~~
 {: #fig-enc-request title="Streamed Encapsulated Request Format"}
 
-
 # Response Format {#response}
 
 Streamed OHTTP responses start with a nonce, followed by chunks of data protected with
@@ -109,7 +108,7 @@ Non-Final Chunk {
   AEAD-Protected Chunk (..),
 }
 ~~~
-{: #fig-enc-request title="Streamed Encapsulated Response Format"}
+{: #fig-enc-response title="Streamed Encapsulated Response Format"}
 
 # Security Considerations {#security}
 
