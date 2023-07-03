@@ -3,7 +3,7 @@ title: "Streamed Oblivious HTTP Messages"
 abbrev: "Streamed OHTTP"
 category: std
 
-docname: draft-ohai-streamed-http-latest
+docname: draft-ohai-streamed-ohttp-latest
 submissiontype: IETF
 number:
 date:
