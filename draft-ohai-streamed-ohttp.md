@@ -111,7 +111,7 @@ Non-Final Chunk {
 ~~~
 {: #fig-enc-request title="Streamed Encapsulated Response Format"}
 
-# Security Considerations
+# Security Considerations {#security}
 
 TODO Security
 
@@ -152,7 +152,7 @@ Encoding considerations:
 
 Security considerations:
 
-: see {{sec-media}}
+: see {{security}}
 
 Interoperability considerations:
 
@@ -230,7 +230,7 @@ Encoding considerations:
 
 Security considerations:
 
-: see {{sec-media}}
+: see {{security}}
 
 Interoperability considerations:
 
