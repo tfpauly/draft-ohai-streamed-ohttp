@@ -67,32 +67,41 @@ media types are "message/ohttp-streamed-req" (defined in {{iana-req}}) and
 
 # Request Format {#request}
 
-Streamed OHTTP requests start with key and algorithm IDs, followed by chunks of data
-protected with HPKE. The final chunk is indicated with a length of 0, which means it
-extends to the end of the outer stream.
+Streamed OHTTP requests start with the same header as used for the non-streamed variant,
+which consists of a key ID, algorithm IDs, and the KEM shared secret. This header is
+followed by chunks of data protected with HPKE, each of which is preceded by a length field
+encoded as a variable-length integer (as defined in {{Section 16 of !QUIC=RFC9000}}).
+The final chunk is indicated with a length of 0, which means it extends to the end of
+the outer stream.
 
 ~~~
 Streamed Encapsulated Request {
+  Streamed Request Header (56 + 8 * Nenc),
+  Streamed Request Chunks (..),
+}
+
+Streamed Request Header {
   Key Identifier (8),
   HPKE KEM ID (16),
   HPKE KDF ID (16),
   HPKE AEAD ID (16),
   Encapsulated KEM Shared Secret (8 * Nenc),
-  HPKE-Protected Request Data (..),
 }
 
-HPKE-Protected Request Data {
-  Non-Final Chunk (..),
-  Final Chunk Indicator (i) = 0,
+Streamed Request Chunks {
+  Non-Final Request Chunk (..),
+  Final Request Chunk Indicator (i) = 0,
   HPKE-Protected Final Chunk (..),
 }
 
-Non-Final Chunk {
+Non-Final Request Chunk {
   Length (i) = 1..,
   HPKE-Protected Chunk (..),
 }
 ~~~
 {: #fig-enc-request title="Streamed Encapsulated Request Format"}
+
+The content of the HPKE-protected chunks is defined in {{request-encap}}.
 
 # Response Format {#response}
 
@@ -101,18 +110,18 @@ an AEAD. The final chunk is indicated with a length of 0, which means it extends
 the end of the outer stream.
 
 ~~~
-Streamed Encapsulated Response{
-  Nonce (Nk),
-  AEAD-Protected Request Data (..),
+Streamed Encapsulated Response {
+  Response Nonce (Nk),
+  Streamed Response Chunks (..),
 }
 
-AEAD-Protected Request Data {
-  Non-Final Chunk (..),
-  Final Chunk Indicator (i) = 0,
-  AEAD-Protected Final Chunk (..),
+Streamed Response Chunks {
+  Non-Final Response Chunk (..),
+  Final Response Chunk Indicator (i) = 0,
+  AEAD-Protected Final Response Chunk (..),
 }
 
-Non-Final Chunk {
+Non-Final Response Chunk {
   Length (i) = 1..,
   AEAD-Protected Chunk (..),
 }
@@ -140,10 +149,11 @@ attacks on individual chunks. This also allows the chunks to be transported with
 different structures, and still be valid as long as the order and finality
 are preserved.
 
-## Request Encapsulation
+## Request Encapsulation {#request-encap}
 
 For requests, the setup of the HPKE context and the encrypted request header
-is the same as the non-streamed variant.
+is the same as the non-streamed variant. This is the Streamed Request Header
+defined in {{request}}.
 
 ~~~
 hdr = concat(encode(1, key_id),
@@ -158,17 +168,26 @@ enc_request_hdr = concat(hdr, enc)
 ~~~
 
 Each chunk is sealed using the HPKE context. For non-final chunks, the AAD
-is empty. The final chunk in a request uses an AAD of the string "final".
-HPKE already maintains a sequence number for sealing operations as part of
-the context, so the order of chunks is protected.
+is empty.
 
 ~~~
 sealed_chunk = sctxt.Seal("", chunk)
-...
-sealed_final_chunk = sctxt.Seal("final", final_chunk)
+sealed_chunk_len = varint_encode(len(sealed_chunk))
+non_final_chunk = concat(sealed_chunk_len, sealed_chunk)
 ~~~
 
-## Response Encapsulation
+The final chunk in a request uses an AAD of the string "final".
+
+~~~
+sealed_final_chunk = sctxt.Seal("final", chunk)
+sealed_final_chunk_len = varint_encode(len(sealed_final_chunk))
+final_chunk = concat(sealed_final_chunk_len, sealed_final_chunk)
+~~~
+
+HPKE already maintains a sequence number for sealing operations as part of
+the context, so the order of chunks is protected.
+
+## Response Encapsulation {#response-encap}
 
 For responses, the first piece of data sent back is the response nonce,
 as in the non-streamed variant.
@@ -178,10 +197,7 @@ response_nonce = random(max(Nn, Nk))
 ~~~
 
 Each chunk is sealed using the same AEAD key and AEAD nonce that are
-derived for the non-streamed variant. The nonce additionally is XORed
-with a counter to indicate the order of the chunks. For non-final chunks,
-the AAD is empty. The final chunk in a response uses an AAD of the string
-"final".
+derived for the non-streamed variant, which are calculated as follows:
 
 ~~~
 secret = context.Export("message/bhttp response", Nk)
@@ -190,21 +206,43 @@ salt = concat(enc, response_nonce)
 prk = Extract(salt, secret)
 aead_key = Expand(prk, "key", Nk)
 aead_nonce = Expand(prk, "nonce", Nn)
+~~~
 
+The sender also maintains a counter of chunks, which is initialized
+to 0.
+
+~~~
 counter = 0
+~~~
 
-nonce = aead_nonce XOR encode(Nn, counter)
-sealed_chunk = Seal(aead_key, nonce, "", chunk)
+The nonce additionally is XORed with a counter to indicate the order
+of the chunks. For non-final chunks, the AAD is empty.
+
+~~~
+chunk_nonce = aead_nonce XOR encode(Nn, counter)
+sealed_chunk = Seal(aead_key, chunk_nonce, "", chunk)
+sealed_chunk_len = varint_encode(len(sealed_chunk))
+non_final_chunk = concat(sealed_chunk_len, sealed_chunk)
 counter++
-...
-nonce = aead_nonce XOR encode(Nn, counter)
-sealed_final_chunk = Seal(aead_key, nonce, "final", final_chunk)
+~~~
+
+The final chunk in a response uses an AAD of the string "final".
+
+~~~
+chunk_nonce = aead_nonce XOR encode(Nn, counter)
+sealed_final_chunk = Seal(aead_key, chunk_nonce, "final", chunk)
+sealed_final_chunk_len = varint_encode(len(sealed_final_chunk))
+final_chunk = concat(sealed_final_chunk_len, sealed_final_chunk)
 ~~~
 
 # Security Considerations {#security}
 
-TODO Security
+## Truncation Attacks
 
+In order to avoid truncation attacks in which a relay tries to remove
+or drop any request or response chunks, receivers of chunks need to ensure
+that they only accept requests or responses that have a final chunk that
+correctly decrypts using the expected sentinel AAD, "final".
 
 # IANA Considerations
 
@@ -374,4 +412,4 @@ Change controller:
 # Acknowledgments
 {:numbered="false"}
 
-TODO acknowledge.
+TODO acknowledgements.
