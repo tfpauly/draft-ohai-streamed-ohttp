@@ -4,8 +4,8 @@
 
 OHAI Working Group                                              T. Pauly
 Internet-Draft                                                     Apple
-Intended status: Standards Track                             3 July 2023
-Expires: 4 January 2024
+Intended status: Standards Track                            12 July 2023
+Expires: 13 January 2024
 
 
                     Streamed Oblivious HTTP Messages
@@ -47,7 +47,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 4 January 2024.
+   This Internet-Draft will expire on 13 January 2024.
 
 Copyright Notice
 
@@ -69,11 +69,14 @@ Table of Contents
    2.  Conventions and Definitions
    3.  Request Format
    4.  Response Format
-   5.  Security Considerations
-   6.  IANA Considerations
-     6.1.  message/ohttp-streamed-req Media Type
-     6.2.  message/ohttp-streamed-res Media Type
-   7.  Normative References
+   5.  Encapsulation of Chunks
+     5.1.  Request encapsulation
+     5.2.  Response encapsulation
+   6.  Security Considerations
+   7.  IANA Considerations
+     7.1.  message/ohttp-streamed-req Media Type
+     7.2.  message/ohttp-streamed-res Media Type
+   8.  Normative References
    Acknowledgments
    Author's Address
 
@@ -162,19 +165,95 @@ Table of Contents
 
               Figure 2: Streamed Encapsulated Response Format
 
-5.  Security Considerations
+5.  Encapsulation of Chunks
+
+   The encapsulation of streamed Oblivious HTTP requests and responses
+   uses the same approach as the non-streamed variant, with the
+   difference that the body of requests and responses are sealed and
+   opened in chunks, instead of as a whole.
+
+   Besides the chunks being individually encrypted and authenticated,
+   the chunks protect two other pieces of information:
+
+   1.  the order of the chunks (the sequence number of each chunk),
+       which is included in the nonce of each chunk.
+
+   2.  which chunk is the final chunk, which is indicated by a sentinel
+       in the AAD of the final chunk.
+
+   The format of the outer packaging that carries the chunks (the length
+   fields, specifically) is not explicitly authenticated.  AEADs already
+   prevent truncation attacks on individual chunks.  This also allows
+   the chunks to be transported with different structures, and still be
+   valid as long as the order and finality are preserved.
+
+5.1.  Request encapsulation
+
+   For requests, the setup of the HPKE context and the encrypted request
+   header is the same as the non-streamed variant.
+
+   hdr = concat(encode(1, key_id),
+                encode(2, kem_id),
+                encode(2, kdf_id),
+                encode(2, aead_id))
+   info = concat(encode_str("message/bhttp request"),
+                 encode(1, 0),
+                 hdr)
+   enc, sctxt = SetupBaseS(pkR, info)
+   enc_request_hdr = concat(hdr, enc)
+
+   Each chunk is sealed using the HPKE context.  For non-final chunks,
+   the AAD is empty.  The final chunk in a request uses an AAD of the
+   string "final".  HPKE already maintains a sequence number for sealing
+   operations as part of the context, so the order of chunks is
+   protected.
+
+   sealed_chunk = sctxt.Seal("", chunk)
+   ...
+   sealed_final_chunk = sctxt.Seal("final", final_chunk)
+
+5.2.  Response encapsulation
+
+   For responses, the first piece of data sent back is the response
+   nonce, as in the non-streamed variant.
+
+   response_nonce = random(max(Nn, Nk))
+
+   Each chunk is sealed using the same AEAD key and AEAD nonce that are
+   derived for the non-streamed variant.  The nonce additionally is
+   XORed with a counter to indicate the order of the chunks.  For non-
+   final chunks, the AAD is empty.  The final chunk in a response uses
+   an AAD of the string "final".
+
+   secret = context.Export("message/bhttp response", Nk)
+   response_nonce = random(max(Nn, Nk))
+   salt = concat(enc, response_nonce)
+   prk = Extract(salt, secret)
+   aead_key = Expand(prk, "key", Nk)
+   aead_nonce = Expand(prk, "nonce", Nn)
+
+   counter = 0
+
+   nonce = aead_nonce XOR encode(Nn, counter)
+   sealed_chunk = Seal(aead_key, nonce, "", chunk)
+   counter++
+   ...
+   nonce = aead_nonce XOR encode(Nn, counter)
+   sealed_final_chunk = Seal(aead_key, nonce, "final", final_chunk)
+
+6.  Security Considerations
 
    TODO Security
 
-6.  IANA Considerations
+7.  IANA Considerations
 
    This document updates the "Media Types" registry at
    https://iana.org/assignments/media-types
    (https://iana.org/assignments/media-types) to add the media types
-   "message/ohttp-streamed req" (Section 6.1), and "message/ohttp-
-   streamed-res" (Section 6.2), following the procedures of [RFC6838].
+   "message/ohttp-streamed req" (Section 7.1), and "message/ohttp-
+   streamed-res" (Section 7.2), following the procedures of [RFC6838].
 
-6.1.  message/ohttp-streamed-req Media Type
+7.1.  message/ohttp-streamed-req Media Type
 
    The "message/ohttp-streamed-req" identifies an encrypted binary HTTP
    request that is transmitted using streamed chunks.  This is a binary
@@ -185,7 +264,7 @@ Table of Contents
    Required parameters:  N/A
    Optional parameters:  N/A
    Encoding considerations:  "binary"
-   Security considerations:  see Section 5
+   Security considerations:  see Section 6
    Interoperability considerations:  N/A
    Published specification:  this specification
    Applications that use this media type:  Oblivious HTTP and
@@ -204,7 +283,7 @@ Table of Contents
    Author:  see Authors' Addresses section
    Change controller:  IETF
 
-6.2.  message/ohttp-streamed-res Media Type
+7.2.  message/ohttp-streamed-res Media Type
 
    The "message/ohttp-res" identifies an encrypted binary HTTP response
    that is transmitted using streamed chunks.  This is a binary format
@@ -215,7 +294,7 @@ Table of Contents
    Required parameters:  N/A
    Optional parameters:  N/A
    Encoding considerations:  "binary"
-   Security considerations:  see Section 5
+   Security considerations:  see Section 6
    Interoperability considerations:  N/A
    Published specification:  this specification
    Applications that use this media type:  Oblivious HTTP and
@@ -234,7 +313,7 @@ Table of Contents
    Author:  see Authors' Addresses section
    Change controller:  IETF
 
-7.  Normative References
+8.  Normative References
 
    [HPKE]     Barnes, R., Bhargavan, K., Lipp, B., and C. Wood, "Hybrid
               Public Key Encryption", RFC 9180, DOI 10.17487/RFC9180,
