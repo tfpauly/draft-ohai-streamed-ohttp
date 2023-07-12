@@ -67,16 +67,17 @@ Table of Contents
 
    1.  Introduction
    2.  Conventions and Definitions
-   3.  Request Format
-   4.  Response Format
-   5.  Encapsulation of Chunks
-     5.1.  Request encapsulation
-     5.2.  Response encapsulation
-   6.  Security Considerations
-   7.  IANA Considerations
-     7.1.  message/ohttp-streamed-req Media Type
-     7.2.  message/ohttp-streamed-res Media Type
-   8.  Normative References
+   3.  Streamed Request and Response Media Types
+   4.  Request Format
+   5.  Response Format
+   6.  Encapsulation of Chunks
+     6.1.  Request Encapsulation
+     6.2.  Response Encapsulation
+   7.  Security Considerations
+   8.  IANA Considerations
+     8.1.  message/ohttp-streamed-req Media Type
+     8.2.  message/ohttp-streamed-res Media Type
+   9.  Normative References
    Acknowledgments
    Author's Address
 
@@ -104,6 +105,10 @@ Table of Contents
    stream of encrypted chunks can improve the performance of
    applications.
 
+   This document defines a variant of Oblivious HTTP that supports
+   streaming both requests and responses in chunks, along with new media
+   types.
+
 2.  Conventions and Definitions
 
    The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
@@ -112,7 +117,14 @@ Table of Contents
    BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
    capitals, as shown here.
 
-3.  Request Format
+3.  Streamed Request and Response Media Types
+
+   Streamed Oblivious HTTP defines different media than the non-streamed
+   variant.  These media types are "message/ohttp-streamed-req" (defined
+   in Section 8.1) and "message/ohttp-streamed-res" (defined in
+   Section 8.2).
+
+4.  Request Format
 
    Streamed OHTTP requests start with key and algorithm IDs, followed by
    chunks of data protected with HPKE.  The final chunk is indicated
@@ -141,7 +153,7 @@ Table of Contents
 
                Figure 1: Streamed Encapsulated Request Format
 
-4.  Response Format
+5.  Response Format
 
    Streamed OHTTP responses start with a nonce, followed by chunks of
    data protected with an AEAD.  The final chunk is indicated with a
@@ -165,7 +177,7 @@ Table of Contents
 
               Figure 2: Streamed Encapsulated Response Format
 
-5.  Encapsulation of Chunks
+6.  Encapsulation of Chunks
 
    The encapsulation of streamed Oblivious HTTP requests and responses
    uses the same approach as the non-streamed variant, with the
@@ -187,7 +199,7 @@ Table of Contents
    the chunks to be transported with different structures, and still be
    valid as long as the order and finality are preserved.
 
-5.1.  Request encapsulation
+6.1.  Request Encapsulation
 
    For requests, the setup of the HPKE context and the encrypted request
    header is the same as the non-streamed variant.
@@ -212,7 +224,7 @@ Table of Contents
    ...
    sealed_final_chunk = sctxt.Seal("final", final_chunk)
 
-5.2.  Response encapsulation
+6.2.  Response Encapsulation
 
    For responses, the first piece of data sent back is the response
    nonce, as in the non-streamed variant.
@@ -241,30 +253,30 @@ Table of Contents
    nonce = aead_nonce XOR encode(Nn, counter)
    sealed_final_chunk = Seal(aead_key, nonce, "final", final_chunk)
 
-6.  Security Considerations
+7.  Security Considerations
 
    TODO Security
 
-7.  IANA Considerations
+8.  IANA Considerations
 
    This document updates the "Media Types" registry at
    https://iana.org/assignments/media-types
    (https://iana.org/assignments/media-types) to add the media types
-   "message/ohttp-streamed req" (Section 7.1), and "message/ohttp-
-   streamed-res" (Section 7.2), following the procedures of [RFC6838].
+   "message/ohttp-streamed-req" (Section 8.1), and "message/ohttp-
+   streamed-res" (Section 8.2), following the procedures of [RFC6838].
 
-7.1.  message/ohttp-streamed-req Media Type
+8.1.  message/ohttp-streamed-req Media Type
 
    The "message/ohttp-streamed-req" identifies an encrypted binary HTTP
    request that is transmitted using streamed chunks.  This is a binary
-   format that is defined in Section 3.
+   format that is defined in Section 4.
 
    Type name:  message
    Subtype name:  ohttp-streamed-req
    Required parameters:  N/A
    Optional parameters:  N/A
    Encoding considerations:  "binary"
-   Security considerations:  see Section 6
+   Security considerations:  see Section 7
    Interoperability considerations:  N/A
    Published specification:  this specification
    Applications that use this media type:  Oblivious HTTP and
@@ -283,18 +295,18 @@ Table of Contents
    Author:  see Authors' Addresses section
    Change controller:  IETF
 
-7.2.  message/ohttp-streamed-res Media Type
+8.2.  message/ohttp-streamed-res Media Type
 
    The "message/ohttp-res" identifies an encrypted binary HTTP response
    that is transmitted using streamed chunks.  This is a binary format
-   that is defined in Section 4.
+   that is defined in Section 5.
 
    Type name:  message
    Subtype name:  ohttp-streamed-res
    Required parameters:  N/A
    Optional parameters:  N/A
    Encoding considerations:  "binary"
-   Security considerations:  see Section 6
+   Security considerations:  see Section 7
    Interoperability considerations:  N/A
    Published specification:  this specification
    Applications that use this media type:  Oblivious HTTP and
@@ -313,7 +325,7 @@ Table of Contents
    Author:  see Authors' Addresses section
    Change controller:  IETF
 
-8.  Normative References
+9.  Normative References
 
    [HPKE]     Barnes, R., Bhargavan, K., Lipp, B., and C. Wood, "Hybrid
               Public Key Encryption", RFC 9180, DOI 10.17487/RFC9180,
