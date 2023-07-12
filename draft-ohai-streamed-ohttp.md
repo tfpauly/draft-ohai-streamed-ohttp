@@ -110,6 +110,88 @@ Non-Final Chunk {
 ~~~
 {: #fig-enc-response title="Streamed Encapsulated Response Format"}
 
+# Encapsulation of Chunks
+
+The encapsulation of streamed Oblivious HTTP requests and responses uses
+the same approach as the non-streamed variant, with the difference that
+the body of requests and responses are sealed and opened in chunks, instead
+of as a whole.
+
+Besides the chunks being individually encrypted and authenticated, the chunks
+protect two other pieces of information:
+
+1. the order of the chunks (the sequence number of each chunk), which is
+included in the nonce of each chunk.
+1. which chunk is the final chunk, which is indicated by a sentinel in the AAD
+of the final chunk.
+
+The format of the outer packaging that carries the chunks (the length fields,
+specifically) is not explicitly authenticated. AEADs already prevent truncation
+attacks on individual chunks. This also allows the chunks to be transported with
+different structures, and still be valid as long as the order and finality
+are preserved.
+
+## Request encapsulation
+
+For requests, the setup of the HPKE context and the encrypted request header
+is the same as the non-streamed variant.
+
+~~~
+hdr = concat(encode(1, key_id),
+             encode(2, kem_id),
+             encode(2, kdf_id),
+             encode(2, aead_id))
+info = concat(encode_str("message/bhttp request"),
+              encode(1, 0),
+              hdr)
+enc, sctxt = SetupBaseS(pkR, info)
+enc_request_hdr = concat(hdr, enc)
+~~~
+
+Each chunk is sealed using the HPKE context. For non-final chunks, the AAD
+is empty. The final chunk in a request uses an AAD of the string "final".
+HPKE already maintains a sequence number for sealing operations as part of
+the context, so the order of chunks is protected.
+
+~~~
+sealed_chunk = sctxt.Seal("", chunk)
+...
+sealed_final_chunk = sctxt.Seal("final", final_chunk)
+~~~
+
+## Response encapsulation
+
+For responses, the first piece of data sent back is the response nonce,
+as in the non-streamed variant.
+
+~~~
+response_nonce = random(max(Nn, Nk))
+~~~
+
+Each chunk is sealed using the same AEAD key and AEAD nonce that are
+derived for the non-streamed variant. The nonce additionally is XORed
+with a counter to indicate the order of the chunks. For non-final chunks,
+the AAD is empty. The final chunk in a response uses an AAD of the string
+"final".
+
+~~~
+secret = context.Export("message/bhttp response", Nk)
+response_nonce = random(max(Nn, Nk))
+salt = concat(enc, response_nonce)
+prk = Extract(salt, secret)
+aead_key = Expand(prk, "key", Nk)
+aead_nonce = Expand(prk, "nonce", Nn)
+
+counter = 0
+
+nonce = aead_nonce XOR encode(Nn, counter)
+sealed_chunk = Seal(aead_key, nonce, "", chunk)
+counter++
+...
+nonce = aead_nonce XOR encode(Nn, counter)
+sealed_final_chunk = Seal(aead_key, nonce, "final", final_chunk)
+~~~
+
 # Security Considerations {#security}
 
 TODO Security
