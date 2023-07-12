@@ -1180,6 +1180,11 @@ messages slowly.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
             <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-security-considerations" class="internal xref">Security Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.1">
+                <p id="section-toc.1-1.7.2.1.1"><a href="#section-7.1" class="auto internal xref">7.1</a>.  <a href="#name-truncation-attacks" class="internal xref">Truncation Attacks</a></p>
+</li>
+            </ul>
 </li>
           <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
             <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
@@ -1255,29 +1260,36 @@ media types are "message/ohttp-streamed-req" (defined in <a href="#iana-req" cla
       <h2 id="name-request-format">
 <a href="#section-4" class="section-number selfRef">4. </a><a href="#name-request-format" class="section-name selfRef">Request Format</a>
       </h2>
-<p id="section-4-1">Streamed OHTTP requests start with key and algorithm IDs, followed by chunks of data
-protected with HPKE. The final chunk is indicated with a length of 0, which means it
-extends to the end of the outer stream.<a href="#section-4-1" class="pilcrow">¶</a></p>
+<p id="section-4-1">Streamed OHTTP requests start with the same header as used for the non-streamed variant,
+which consists of a key ID, algorithm IDs, and the KEM shared secret. This header is
+followed by chunks of data protected with HPKE, each of which is preceded by a length field
+encoded as a variable-length integer (as defined in <span><a href="https://rfc-editor.org/rfc/rfc9000#section-16" class="relref">Section 16</a> of [<a href="#QUIC" class="cite xref">QUIC</a>]</span>).
+The final chunk is indicated with a length of 0, which means it extends to the end of
+the outer stream.<a href="#section-4-1" class="pilcrow">¶</a></p>
 <span id="name-streamed-encapsulated-reque"></span><div id="fig-enc-request">
 <figure id="figure-1">
         <div class="alignLeft art-text artwork" id="section-4-2.1">
 <pre>
 Streamed Encapsulated Request {
+  Streamed Request Header (56 + 8 * Nenc),
+  Streamed Request Chunks (..),
+}
+
+Streamed Request Header {
   Key Identifier (8),
   HPKE KEM ID (16),
   HPKE KDF ID (16),
   HPKE AEAD ID (16),
   Encapsulated KEM Shared Secret (8 * Nenc),
-  HPKE-Protected Request Data (..),
 }
 
-HPKE-Protected Request Data {
-  Non-Final Chunk (..),
-  Final Chunk Indicator (i) = 0,
+Streamed Request Chunks {
+  Non-Final Request Chunk (..),
+  Final Request Chunk Indicator (i) = 0,
   HPKE-Protected Final Chunk (..),
 }
 
-Non-Final Chunk {
+Non-Final Request Chunk {
   Length (i) = 1..,
   HPKE-Protected Chunk (..),
 }
@@ -1287,6 +1299,7 @@ Non-Final Chunk {
 <a href="#name-streamed-encapsulated-reque" class="selfRef">Streamed Encapsulated Request Format</a>
         </figcaption></figure>
 </div>
+<p id="section-4-3">The content of the HPKE-protected chunks is defined in <a href="#request-encap" class="auto internal xref">Section 6.1</a>.<a href="#section-4-3" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="response">
@@ -1301,18 +1314,18 @@ the end of the outer stream.<a href="#section-5-1" class="pilcrow">¶</a></p>
 <figure id="figure-2">
         <div class="alignLeft art-text artwork" id="section-5-2.1">
 <pre>
-Streamed Encapsulated Response{
-  Nonce (Nk),
-  AEAD-Protected Request Data (..),
+Streamed Encapsulated Response {
+  Response Nonce (Nk),
+  Streamed Response Chunks (..),
 }
 
-AEAD-Protected Request Data {
-  Non-Final Chunk (..),
-  Final Chunk Indicator (i) = 0,
-  AEAD-Protected Final Chunk (..),
+Streamed Response Chunks {
+  Non-Final Response Chunk (..),
+  Final Response Chunk Indicator (i) = 0,
+  AEAD-Protected Final Response Chunk (..),
 }
 
-Non-Final Chunk {
+Non-Final Response Chunk {
   Length (i) = 1..,
   AEAD-Protected Chunk (..),
 }
@@ -1348,13 +1361,14 @@ specifically) is not explicitly authenticated. AEADs already prevent truncation
 attacks on individual chunks. This also allows the chunks to be transported with
 different structures, and still be valid as long as the order and finality
 are preserved.<a href="#section-6-4" class="pilcrow">¶</a></p>
-<div id="request-encapsulation">
+<div id="request-encap">
 <section id="section-6.1">
         <h3 id="name-request-encapsulation">
 <a href="#section-6.1" class="section-number selfRef">6.1. </a><a href="#name-request-encapsulation" class="section-name selfRef">Request Encapsulation</a>
         </h3>
 <p id="section-6.1-1">For requests, the setup of the HPKE context and the encrypted request header
-is the same as the non-streamed variant.<a href="#section-6.1-1" class="pilcrow">¶</a></p>
+is the same as the non-streamed variant. This is the Streamed Request Header
+defined in <a href="#request" class="auto internal xref">Section 4</a>.<a href="#section-6.1-1" class="pilcrow">¶</a></p>
 <div class="alignLeft art-text artwork" id="section-6.1-2">
 <pre>
 hdr = concat(encode(1, key_id),
@@ -1369,19 +1383,27 @@ enc_request_hdr = concat(hdr, enc)
 </pre><a href="#section-6.1-2" class="pilcrow">¶</a>
 </div>
 <p id="section-6.1-3">Each chunk is sealed using the HPKE context. For non-final chunks, the AAD
-is empty. The final chunk in a request uses an AAD of the string "final".
-HPKE already maintains a sequence number for sealing operations as part of
-the context, so the order of chunks is protected.<a href="#section-6.1-3" class="pilcrow">¶</a></p>
+is empty.<a href="#section-6.1-3" class="pilcrow">¶</a></p>
 <div class="alignLeft art-text artwork" id="section-6.1-4">
 <pre>
 sealed_chunk = sctxt.Seal("", chunk)
-...
-sealed_final_chunk = sctxt.Seal("final", final_chunk)
+sealed_chunk_len = varint_encode(len(sealed_chunk))
+non_final_chunk = concat(sealed_chunk_len, sealed_chunk)
 </pre><a href="#section-6.1-4" class="pilcrow">¶</a>
 </div>
+<p id="section-6.1-5">The final chunk in a request uses an AAD of the string "final".<a href="#section-6.1-5" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-6.1-6">
+<pre>
+sealed_final_chunk = sctxt.Seal("final", chunk)
+sealed_final_chunk_len = varint_encode(len(sealed_final_chunk))
+final_chunk = concat(sealed_final_chunk_len, sealed_final_chunk)
+</pre><a href="#section-6.1-6" class="pilcrow">¶</a>
+</div>
+<p id="section-6.1-7">HPKE already maintains a sequence number for sealing operations as part of
+the context, so the order of chunks is protected.<a href="#section-6.1-7" class="pilcrow">¶</a></p>
 </section>
 </div>
-<div id="response-encapsulation">
+<div id="response-encap">
 <section id="section-6.2">
         <h3 id="name-response-encapsulation">
 <a href="#section-6.2" class="section-number selfRef">6.2. </a><a href="#name-response-encapsulation" class="section-name selfRef">Response Encapsulation</a>
@@ -1394,10 +1416,7 @@ response_nonce = random(max(Nn, Nk))
 </pre><a href="#section-6.2-2" class="pilcrow">¶</a>
 </div>
 <p id="section-6.2-3">Each chunk is sealed using the same AEAD key and AEAD nonce that are
-derived for the non-streamed variant. The nonce additionally is XORed
-with a counter to indicate the order of the chunks. For non-final chunks,
-the AAD is empty. The final chunk in a response uses an AAD of the string
-"final".<a href="#section-6.2-3" class="pilcrow">¶</a></p>
+derived for the non-streamed variant, which are calculated as follows:<a href="#section-6.2-3" class="pilcrow">¶</a></p>
 <div class="alignLeft art-text artwork" id="section-6.2-4">
 <pre>
 secret = context.Export("message/bhttp response", Nk)
@@ -1406,16 +1425,34 @@ salt = concat(enc, response_nonce)
 prk = Extract(salt, secret)
 aead_key = Expand(prk, "key", Nk)
 aead_nonce = Expand(prk, "nonce", Nn)
-
-counter = 0
-
-nonce = aead_nonce XOR encode(Nn, counter)
-sealed_chunk = Seal(aead_key, nonce, "", chunk)
-counter++
-...
-nonce = aead_nonce XOR encode(Nn, counter)
-sealed_final_chunk = Seal(aead_key, nonce, "final", final_chunk)
 </pre><a href="#section-6.2-4" class="pilcrow">¶</a>
+</div>
+<p id="section-6.2-5">The sender also maintains a counter of chunks, which is initialized
+to 0.<a href="#section-6.2-5" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-6.2-6">
+<pre>
+counter = 0
+</pre><a href="#section-6.2-6" class="pilcrow">¶</a>
+</div>
+<p id="section-6.2-7">The nonce additionally is XORed with a counter to indicate the order
+of the chunks. For non-final chunks, the AAD is empty.<a href="#section-6.2-7" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-6.2-8">
+<pre>
+chunk_nonce = aead_nonce XOR encode(Nn, counter)
+sealed_chunk = Seal(aead_key, chunk_nonce, "", chunk)
+sealed_chunk_len = varint_encode(len(sealed_chunk))
+non_final_chunk = concat(sealed_chunk_len, sealed_chunk)
+counter++
+</pre><a href="#section-6.2-8" class="pilcrow">¶</a>
+</div>
+<p id="section-6.2-9">The final chunk in a response uses an AAD of the string "final".<a href="#section-6.2-9" class="pilcrow">¶</a></p>
+<div class="alignLeft art-text artwork" id="section-6.2-10">
+<pre>
+chunk_nonce = aead_nonce XOR encode(Nn, counter)
+sealed_final_chunk = Seal(aead_key, chunk_nonce, "final", chunk)
+sealed_final_chunk_len = varint_encode(len(sealed_final_chunk))
+final_chunk = concat(sealed_final_chunk_len, sealed_final_chunk)
+</pre><a href="#section-6.2-10" class="pilcrow">¶</a>
 </div>
 </section>
 </div>
@@ -1426,7 +1463,17 @@ sealed_final_chunk = Seal(aead_key, nonce, "final", final_chunk)
       <h2 id="name-security-considerations">
 <a href="#section-7" class="section-number selfRef">7. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
       </h2>
-<p id="section-7-1">TODO Security<a href="#section-7-1" class="pilcrow">¶</a></p>
+<div id="truncation-attacks">
+<section id="section-7.1">
+        <h3 id="name-truncation-attacks">
+<a href="#section-7.1" class="section-number selfRef">7.1. </a><a href="#name-truncation-attacks" class="section-name selfRef">Truncation Attacks</a>
+        </h3>
+<p id="section-7.1-1">In order to avoid truncation attacks in which a relay tries to remove
+or drop any request or response chunks, receivers of chunks need to ensure
+that they only accept requests or responses that have a final chunk that
+correctly decrypts using the expected sentinel AAD, "final".<a href="#section-7.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
 </section>
 </div>
 <div id="iana-considerations">
@@ -1674,6 +1721,10 @@ identify encapsulated binary HTTP responses sent in streamed chunks.<a href="#se
       <dd>
 <span class="refAuthor">Thomson, M.</span> and <span class="refAuthor">C. A. Wood</span>, <span class="refTitle">"Oblivious HTTP"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-ohai-ohttp-08</span>, <time datetime="2023-03-15" class="refDate">15 March 2023</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-ohai-ohttp-08">https://datatracker.ietf.org/doc/html/draft-ietf-ohai-ohttp-08</a>&gt;</span>. </dd>
 <dd class="break"></dd>
+<dt id="QUIC">[QUIC]</dt>
+      <dd>
+<span class="refAuthor">Iyengar, J., Ed.</span> and <span class="refAuthor">M. Thomson, Ed.</span>, <span class="refTitle">"QUIC: A UDP-Based Multiplexed and Secure Transport"</span>, <span class="seriesInfo">RFC 9000</span>, <span class="seriesInfo">DOI 10.17487/RFC9000</span>, <time datetime="2021-05" class="refDate">May 2021</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9000">https://www.rfc-editor.org/rfc/rfc9000</a>&gt;</span>. </dd>
+<dd class="break"></dd>
 <dt id="RFC2119">[RFC2119]</dt>
       <dd>
 <span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc2119">https://www.rfc-editor.org/rfc/rfc2119</a>&gt;</span>. </dd>
@@ -1693,7 +1744,7 @@ identify encapsulated binary HTTP responses sent in streamed chunks.<a href="#se
       <h2 id="name-acknowledgments">
 <a href="#name-acknowledgments" class="section-name selfRef">Acknowledgments</a>
       </h2>
-<p id="appendix-A-1">TODO acknowledge.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+<p id="appendix-A-1">TODO acknowledgements.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="authors-addresses">
