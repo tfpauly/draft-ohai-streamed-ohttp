@@ -52,9 +52,18 @@ decrypt parts of the messages in chunks. If a request or response can be process
 receiver in separate parts, and is particularly large or will be generated slowly, then
 sending a stream of encrypted chunks can improve the performance of applications.
 
+This document defines a variant of Oblivious HTTP that supports streaming both requests
+and responses in chunks, along with new media types.
+
 # Conventions and Definitions
 
 {::boilerplate bcp14-tagged}
+
+# Streamed Request and Response Media Types
+
+Streamed Oblivious HTTP defines different media than the non-streamed variant. These
+media types are "message/ohttp-streamed-req" (defined in {{iana-req}}) and
+"message/ohttp-streamed-res" (defined in {{iana-res}}).
 
 # Request Format {#request}
 
@@ -131,7 +140,7 @@ attacks on individual chunks. This also allows the chunks to be transported with
 different structures, and still be valid as long as the order and finality
 are preserved.
 
-## Request encapsulation
+## Request Encapsulation
 
 For requests, the setup of the HPKE context and the encrypted request header
 is the same as the non-streamed variant.
@@ -159,7 +168,7 @@ sealed_chunk = sctxt.Seal("", chunk)
 sealed_final_chunk = sctxt.Seal("final", final_chunk)
 ~~~
 
-## Response encapsulation
+## Response Encapsulation
 
 For responses, the first piece of data sent back is the response nonce,
 as in the non-streamed variant.
@@ -201,7 +210,7 @@ TODO Security
 
 This document updates the "Media Types" registry at
 <https://iana.org/assignments/media-types> to add the media types
-"message/ohttp-streamed req" ({{iana-req}}), and
+"message/ohttp-streamed-req" ({{iana-req}}), and
 "message/ohttp-streamed-res" ({{iana-res}}), following the procedures of
 {{!RFC6838}}.
 
